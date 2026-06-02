@@ -982,15 +982,31 @@
               $status.textContent = 'Models started · synthesizing...';
             } else if (obj.type === 'end') {
               $status.textContent = 'Complete';
+            } else if (obj.type === 'error') {
+              const nodeName = obj.metadata && obj.metadata.nodeName ? obj.metadata.nodeName : 'n8n';
+              throw new Error('Backend (' + nodeName + '): ' + (obj.content || 'unknown error'));
             }
-          } catch (e) {}
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
         }
       }
       if (buffer.trim()) {
         try {
           const obj = JSON.parse(buffer.trim());
           if (obj.type === 'item' && obj.content) accumulated += obj.content;
-        } catch (e) {}
+          else if (obj.type === 'error') {
+            const nodeName = obj.metadata && obj.metadata.nodeName ? obj.metadata.nodeName : 'n8n';
+            throw new Error('Backend (' + nodeName + '): ' + (obj.content || 'unknown error'));
+          }
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
+
+      if (!accumulated.trim()) {
+        throw new Error('Empty response from webhook — the workflow returned no content. Check n8n execution logs.');
       }
 
       renderAnswer(accumulated);
@@ -1013,6 +1029,13 @@
       $error.textContent = 'Error: ' + (err.message || 'Unknown error');
       $error.classList.add('active');
       $loading.classList.remove('active');
+      $status.textContent = 'Failed';
+      const placeholder = '<em style="color:#7f1d1d">— no response —</em>';
+      [$claude, $gpt, $gemini, $grok, $consensus].forEach(el => {
+        if (el && /streaming|synthesizing|waiting/i.test(el.textContent || '')) {
+          el.innerHTML = placeholder;
+        }
+      });
       const idx = threads.findIndex(t => t.id === threadId);
       if (idx !== -1) {
         threads[idx].inProgress = false;
