@@ -945,6 +945,41 @@
     renderThreadList();
     startTimer();
 
+    function parseNdjsonBody(text) {
+      let acc = '';
+      let backendError = null;
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const obj = JSON.parse(trimmed);
+          if (obj.type === 'item' && obj.content) acc += obj.content;
+          else if (obj.type === 'error') {
+            const nodeName = obj.metadata && obj.metadata.nodeName ? obj.metadata.nodeName : 'n8n';
+            backendError = new Error('Backend (' + nodeName + '): ' + (obj.content || 'unknown error'));
+          }
+        } catch (e) { /* skip malformed line */ }
+      }
+      return { acc, backendError };
+    }
+
+    async function nonStreamingFallback(reason) {
+      $status.textContent = 'Streaming interrupted — retrying without streaming (' + reason + ')';
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatInput: question, sessionId })
+      });
+      if (!res.ok) throw new Error('Retry HTTP ' + res.status);
+      const text = await res.text();
+      const { acc, backendError } = parseNdjsonBody(text);
+      if (backendError) throw backendError;
+      if (!acc.trim()) throw new Error('Empty response on retry');
+      return acc;
+    }
+
+    let accumulated = '';
     try {
       const res = await fetch(WEBHOOK_URL, {
         method: 'POST',
@@ -958,55 +993,53 @@
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let accumulated = '';
       let chunkCount = 0;
+      let streamErr = null;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          try {
-            const obj = JSON.parse(trimmed);
-            if (obj.type === 'item' && obj.content) {
-              accumulated += obj.content;
-              chunkCount++;
-              $status.textContent = 'Streaming · ' + chunkCount + ' chunks · ' + accumulated.length + ' chars';
-              renderAnswer(accumulated);
-            } else if (obj.type === 'begin') {
-              $status.textContent = 'Models started · synthesizing...';
-            } else if (obj.type === 'end') {
-              $status.textContent = 'Complete';
-            } else if (obj.type === 'error') {
-              const nodeName = obj.metadata && obj.metadata.nodeName ? obj.metadata.nodeName : 'n8n';
-              throw new Error('Backend (' + nodeName + '): ' + (obj.content || 'unknown error'));
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const obj = JSON.parse(trimmed);
+              if (obj.type === 'item' && obj.content) {
+                accumulated += obj.content;
+                chunkCount++;
+                $status.textContent = 'Streaming · ' + chunkCount + ' chunks · ' + accumulated.length + ' chars';
+                renderAnswer(accumulated);
+              } else if (obj.type === 'begin') {
+                $status.textContent = 'Models started · synthesizing...';
+              } else if (obj.type === 'end') {
+                $status.textContent = 'Complete';
+              } else if (obj.type === 'error') {
+                const nodeName = obj.metadata && obj.metadata.nodeName ? obj.metadata.nodeName : 'n8n';
+                throw new Error('Backend (' + nodeName + '): ' + (obj.content || 'unknown error'));
+              }
+            } catch (e) {
+              if (e instanceof SyntaxError) continue;
+              throw e;
             }
-          } catch (e) {
-            if (e instanceof SyntaxError) continue;
-            throw e;
           }
         }
-      }
-      if (buffer.trim()) {
-        try {
-          const obj = JSON.parse(buffer.trim());
-          if (obj.type === 'item' && obj.content) accumulated += obj.content;
-          else if (obj.type === 'error') {
-            const nodeName = obj.metadata && obj.metadata.nodeName ? obj.metadata.nodeName : 'n8n';
-            throw new Error('Backend (' + nodeName + '): ' + (obj.content || 'unknown error'));
-          }
-        } catch (e) {
-          if (!(e instanceof SyntaxError)) throw e;
+        if (buffer.trim()) {
+          const { acc: bufAcc, backendError } = parseNdjsonBody(buffer);
+          if (backendError) throw backendError;
+          accumulated += bufAcc;
         }
+      } catch (streamReadErr) {
+        if (/Backend \(/.test(streamReadErr.message || '')) throw streamReadErr;
+        streamErr = streamReadErr;
       }
 
-      if (!accumulated.trim()) {
-        throw new Error('Empty response from webhook — the workflow returned no content. Check n8n execution logs.');
+      if (streamErr || !accumulated.trim()) {
+        accumulated = await nonStreamingFallback(streamErr ? streamErr.message : 'empty stream');
       }
 
       renderAnswer(accumulated);
