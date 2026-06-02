@@ -59,7 +59,28 @@ If you change the synthesis prompt in n8n, keep those headings or update `parseR
 
 ## Deploy
 
-### Option A: Vercel (recommended in original spec)
+### Option A: Host inside n8n itself (no extra service — recommended)
+
+The UI is just static HTML. n8n can serve it directly from the same Railway service that already runs `n8n.instabid.pro` — no second deploy, no DNS change, no CORS config (same origin as the chat webhook).
+
+1. In n8n: **Workflows → Import from File** → pick `n8n-council-ui.workflow.json` from this repo.
+2. Open the imported workflow, click **Active** (top right toggle).
+3. Visit `https://n8n.instabid.pro/webhook/council` — that's the UI, serving the chat through your existing webhook.
+
+The workflow is two nodes: a GET webhook at `/webhook/council` and a Respond-to-Webhook node that returns `index.html` with `Content-Type: text/html`. To update the UI, edit `index.html` here, re-run the build below to regenerate `n8n-council-ui.workflow.json`, and re-import (n8n's import overwrites on same name).
+
+Regenerate after editing `index.html`:
+```bash
+python3 -c "
+import json
+html = open('index.html').read()
+wf = json.load(open('n8n-council-ui.workflow.json'))
+wf['nodes'][1]['parameters']['responseBody'] = html
+json.dump(wf, open('n8n-council-ui.workflow.json','w'), indent=2)
+"
+```
+
+### Option B: Vercel
 
 ```bash
 npm i -g vercel
@@ -70,7 +91,7 @@ Then in Vercel dashboard:
 - Domains → add `council.instabid.pro`
 - DNS: CNAME `council` → `cname.vercel-dns.com`
 
-### Option B: Railway
+### Option C: Railway (separate service)
 
 ```bash
 railway up
