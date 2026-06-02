@@ -1,0 +1,12 @@
+{
+  "name": "instabid-council",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InstaBid AI Council — single-file static UI for the n8n multi-model council webhook.",
+  "scripts": {
+    "start": "serve -s . -l ${PORT:-3000}"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}

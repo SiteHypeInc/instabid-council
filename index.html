@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InstaBid AI Council</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0e1a;
+    color: #e2e8f0;
+    line-height: 1.6;
+    font-size: 15px;
+    min-height: 100vh;
+    background-image: radial-gradient(circle at 20% 0%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 100%, rgba(217, 119, 87, 0.05) 0%, transparent 50%);
+    overflow-x: hidden;
+  }
+
+  /* App shell */
+  .app {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: #07091a;
+    border-right: 1px solid #1e293b;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  @media (max-width: 900px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 280px;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+  }
+
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 1rem;
+  }
+  .sidebar-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #64748b;
+    font-weight: 700;
+  }
+  .new-btn {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    padding: 0.35rem 0.75rem;
+    border-radius: 5px;
+    font-weight: 600;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .new-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(37, 99, 235, 0.4); }
+
+  .thread-list { flex-grow: 1; overflow-y: auto; }
+  .thread-item {
+    padding: 0.8rem 0.85rem;
+    margin-bottom: 0.4rem;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+  }
+  .thread-item:hover { background: #0f1424; border-color: #1e293b; }
+  .thread-item.active { background: #131a2e; border-color: #3b82f6; }
+  .thread-item .question-preview {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+    margin-bottom: 0.3rem;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .thread-item.active .question-preview { color: #f1f5f9; font-weight: 500; }
+  .thread-item.in-progress .question-preview::after {
+    content: ' ●';
+    color: #3b82f6;
+    animation: pulse 1.4s infinite;
+  }
+  .thread-item .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    color: #64748b;
+    letter-spacing: 0.03em;
+  }
+  .thread-item .actions {
+    display: none;
+    gap: 0.25rem;
+  }
+  .thread-item:hover .actions, .thread-item.active .actions { display: flex; }
+  .thread-item .action-btn {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0.2rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .thread-item .action-btn:hover { background: #1e293b; color: #cbd5e1; }
+  .thread-item .action-btn.delete:hover { background: #7f1d1d; color: #fecaca; }
+
+  .empty-list {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #475569;
+    font-size: 0.85rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .sidebar-footer {
+    padding-top: 1rem;
+    border-top: 1px solid #1e293b;
+    margin-top: 1rem;
+  }
+  .session-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #475569;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+  .live-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 0.3rem;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+
+  /* Mobile sidebar toggle */
+  .sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 60;
+    background: #131826;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (max-width: 900px) { .sidebar-toggle { display: flex; } }
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+  .sidebar-overlay.open { display: block; }
+
+  /* Main area */
+  .main {
+    padding: 2rem 2.5rem 4rem;
+    min-width: 0; /* prevents grid item from overflowing */
+  }
+  @media (max-width: 900px) {
+    .main { padding: 4rem 1rem 4rem; }
+  }
+
+  .masthead {
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .title {
+    font-family: 'Newsreader', serif;
+    font-weight: 600;
+    font-size: 1.85rem;
+    color: #f8fafc;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .tagline {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    margin-top: 0.3rem;
+  }
+
+  /* Input area */
+  .input-area {
+    background: #0f1420;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    transition: border-color 0.2s;
+  }
+  .input-area:focus-within { border-color: #3b82f6; }
+  textarea#question {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #f1f5f9;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 56px;
+    outline: none;
+  }
+  textarea#question::placeholder { color: #475569; }
+  .input-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #1e293b;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .input-hint {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  button#send {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    padding: 0.5rem 1.3rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  button#send:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4); }
+  button#send:disabled { background: #1e293b; color: #475569; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* Loading bar */
+  .loading {
+    display: none;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.85rem 1.1rem;
+    background: #0f1420;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #94a3b8;
+  }
+  .loading.active { display: flex; }
+  .loading .pulse {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #3b82f6;
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+  .loading .elapsed { margin-left: auto; color: #64748b; font-size: 0.74rem; }
+
+  /* Answer header (shows the question being answered) */
+  .answer-header {
+    display: none;
+    background: #0f1420;
+    border: 1px solid #1e293b;
+    border-left: 3px solid #3b82f6;
+    border-radius: 6px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .answer-header.active { display: block; }
+  .answer-header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #64748b;
+    margin-bottom: 0.3rem;
+  }
+  .answer-header .q {
+    color: #e2e8f0;
+    font-size: 0.93rem;
+    font-style: italic;
+    line-height: 1.4;
+    padding-right: 6rem;
+  }
+  .answer-header .header-actions {
+    position: absolute;
+    top: 0.85rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.4rem;
+  }
+  .answer-header .header-actions button {
+    background: #131826;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    padding: 0.3rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .answer-header .header-actions button:hover { border-color: #64748b; color: #e2e8f0; background: #1e293b; }
+
+  /* Error */
+  .error-card {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid #7f1d1d;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    color: #fca5a5;
+    margin-bottom: 1rem;
+    font-size: 0.88rem;
+    display: none;
+  }
+  .error-card.active { display: block; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 5rem 2rem;
+    color: #475569;
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 0.75rem; opacity: 0.4; }
+  .empty-state .text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.4rem;
+  }
+  .empty-state .sub {
+    font-size: 0.8rem;
+    color: #334155;
+    font-style: italic;
+  }
+  .empty-state.hidden { display: none; }
+
+  /* Results sections */
+  .results { display: none; }
+  .results.active { display: block; }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #64748b;
+    margin: 1.75rem 0 0.65rem;
+    font-weight: 600;
+  }
+  .section-label:first-child { margin-top: 0.5rem; }
+
+  /* Consensus card */
+  .consensus-card {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.05), rgba(245, 158, 11, 0.02));
+    border: 1px solid #78350f;
+    border-left: 3px solid #fbbf24;
+    border-radius: 8px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.25rem;
+  }
+  .consensus-card .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #fbbf24;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+  .consensus-card .content {
+    color: #f8fafc;
+    font-size: 0.98rem;
+    line-height: 1.7;
+  }
+  .consensus-card .content strong { color: #fde68a; font-weight: 600; }
+  .consensus-card .content p { margin-bottom: 0.7rem; }
+  .consensus-card .content p:last-child { margin-bottom: 0; }
+  .consensus-card .content ul, .consensus-card .content ol { margin: 0.4rem 0 0.6rem 1.4rem; }
+  .consensus-card .content li { margin-bottom: 0.3rem; }
+  .consensus-card .content code {
+    background: rgba(251, 191, 36, 0.1);
+    color: #fde68a;
+    padding: 0.1rem 0.32rem;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88em;
+  }
+
+  /* Dissent card */
+  .dissent-card {
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid #7f1d1d;
+    border-left: 3px solid #ef4444;
+    border-radius: 8px;
+    padding: 1.35rem 1.6rem;
+    margin-bottom: 1.25rem;
+  }
+  .dissent-card .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #fca5a5;
+    font-weight: 700;
+    margin-bottom: 0.65rem;
+  }
+  .dissent-card .content { color: #fecaca; font-size: 0.92rem; }
+  .dissent-card .content strong { color: #fee2e2; font-weight: 600; }
+  .dissent-card .content ul { margin-left: 1.3rem; }
+  .dissent-card .content li { margin-bottom: 0.4rem; }
+  .dissent-card .content p { margin-bottom: 0.45rem; }
+
+  /* Model grid */
+  .models-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+  }
+  @media (min-width: 1100px) {
+    .models-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .model-card {
+    background: #131826;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 1rem 1.15rem;
+    transition: border-color 0.2s, transform 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  .model-card:hover { transform: translateY(-2px); }
+  .model-card .header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 0.7rem;
+  }
+  .model-card .swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .model-card .name { font-weight: 600; font-size: 0.88rem; color: #f1f5f9; letter-spacing: -0.01em; }
+  .model-card .vendor {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: #64748b;
+    margin-left: auto;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .model-card .content {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    line-height: 1.6;
+    flex-grow: 1;
+  }
+  .model-card .content p { margin-bottom: 0.45rem; }
+  .model-card .content code {
+    background: rgba(148, 163, 184, 0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85em;
+  }
+  .model-card .content strong { color: #f1f5f9; }
+  .model-card .content ul, .model-card .content ol { margin: 0.35rem 0 0.55rem 1.1rem; }
+  .model-card .content li { margin-bottom: 0.25rem; }
+
+  .model-card.claude { border-color: #7c2d12; }
+  .model-card.claude:hover { border-color: #D97757; }
+  .model-card.claude .swatch { background: #D97757; }
+  .model-card.claude .vendor { color: #D97757; }
+
+  .model-card.gpt { border-color: #064e3b; }
+  .model-card.gpt:hover { border-color: #10A37F; }
+  .model-card.gpt .swatch { background: #10A37F; }
+  .model-card.gpt .vendor { color: #10A37F; }
+
+  .model-card.gemini { border-color: #1e3a8a; }
+  .model-card.gemini:hover { border-color: #4285F4; }
+  .model-card.gemini .swatch { background: #4285F4; }
+  .model-card.gemini .vendor { color: #4285F4; }
+
+  .model-card.grok { border-color: #4c1d95; }
+  .model-card.grok:hover { border-color: #a78bfa; }
+  .model-card.grok .swatch { background: #a78bfa; }
+  .model-card.grok .vendor { color: #a78bfa; }
+
+  /* Markdown overrides */
+  .content h3 { font-size: 0.98rem; margin: 0.9rem 0 0.35rem; color: #f1f5f9; }
+  .content h4 { font-size: 0.92rem; margin: 0.7rem 0 0.3rem; color: #e2e8f0; }
+  .content hr { border: none; border-top: 1px solid #1e293b; margin: 0.9rem 0; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: #131826;
+    border: 1px solid #334155;
+    color: #f1f5f9;
+    padding: 0.7rem 1.1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    z-index: 100;
+    transform: translateY(120%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .toast.show { transform: translateY(0); }
+  .toast.success { border-color: #166534; color: #bbf7d0; }
+</style>
+</head>
+<body>
+
+<button class="sidebar-toggle" id="sidebar-toggle" title="Toggle threads">☰</button>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Threads</span>
+      <button class="new-btn" id="new-btn">+ New</button>
+    </div>
+    <div class="thread-list" id="thread-list">
+      <div class="empty-list">No threads yet. Ask a question.</div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="session-info">
+        <span class="live-dot"></span>WEBHOOK LIVE · <span id="session-id">—</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="masthead">
+      <div>
+        <h1 class="title">InstaBid AI Council</h1>
+        <div class="tagline">Four frontier models answer in parallel · Opus 4.7 synthesizes</div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea id="question" placeholder="Ask the council..."></textarea>
+      <div class="input-controls">
+        <span class="input-hint">⌘ + Enter to send</span>
+        <button id="send">Send to Council</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="pulse"></div>
+      <span id="loading-status">Routing to four models...</span>
+      <span class="elapsed" id="elapsed">0.0s</span>
+    </div>
+
+    <div class="error-card" id="error"></div>
+
+    <div class="empty-state" id="empty">
+      <div class="icon">⚖</div>
+      <div class="text">ASK A STRATEGIC QUESTION</div>
+      <div class="sub">Four perspectives · synthesized · saved to your thread</div>
+    </div>
+
+    <div class="answer-header" id="answer-header">
+      <div class="label">Question</div>
+      <div class="q" id="answer-question"></div>
+      <div class="header-actions">
+        <button id="copy-btn" title="Copy as markdown">⧉ Copy</button>
+        <button id="download-btn" title="Download as .md">↓ MD</button>
+      </div>
+    </div>
+
+    <div class="results" id="results">
+
+      <div class="section-label">Synthesis</div>
+      <div class="consensus-card">
+        <div class="badge">▶ Consensus</div>
+        <div class="content" id="consensus-content"></div>
+      </div>
+
+      <div class="section-label" id="dissent-label" style="display:none">Disagreements</div>
+      <div class="dissent-card" id="dissent-card" style="display:none">
+        <div class="badge">⚠ Dissent Flags</div>
+        <div class="content" id="dissent-content"></div>
+      </div>
+
+      <div class="section-label">Raw Model Answers</div>
+      <div class="models-grid" id="models-grid">
+        <div class="model-card claude">
+          <div class="header"><div class="swatch"></div><div class="name">Claude Opus 4.7</div><div class="vendor">Anthropic</div></div>
+          <div class="content" id="claude-content"><em style="color:#475569">waiting...</em></div>
+        </div>
+        <div class="model-card gpt">
+          <div class="header"><div class="swatch"></div><div class="name">GPT-5.1</div><div class="vendor">OpenAI</div></div>
+          <div class="content" id="gpt-content"><em style="color:#475569">waiting...</em></div>
+        </div>
+        <div class="model-card gemini">
+          <div class="header"><div class="swatch"></div><div class="name">Gemini 3.1 Pro</div><div class="vendor">Google</div></div>
+          <div class="content" id="gemini-content"><em style="color:#475569">waiting...</em></div>
+        </div>
+        <div class="model-card grok">
+          <div class="header"><div class="swatch"></div><div class="name">Grok 4.3</div><div class="vendor">xAI</div></div>
+          <div class="content" id="grok-content"><em style="color:#475569">waiting...</em></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const WEBHOOK_URL = 'https://n8n.instabid.pro/webhook/c7d2751c-ef7c-4e30-9df7-d865700602e9/chat';
+
+  // Session ID (persistent)
+  let sessionId = localStorage.getItem('council_session_id');
+  if (!sessionId) {
+    sessionId = 'sess-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+    localStorage.setItem('council_session_id', sessionId);
+  }
+  document.getElementById('session-id').textContent = sessionId.split('-')[1].toUpperCase();
+
+  // Thread storage
+  function loadThreads() {
+    try { return JSON.parse(localStorage.getItem('council_threads') || '[]'); }
+    catch (e) { return []; }
+  }
+  function saveThreads(t) { localStorage.setItem('council_threads', JSON.stringify(t)); }
+
+  let threads = loadThreads();
+  let activeThreadId = null;
+
+  // Element refs
+  const $threadList = document.getElementById('thread-list');
+  const $question = document.getElementById('question');
+  const $send = document.getElementById('send');
+  const $newBtn = document.getElementById('new-btn');
+  const $loading = document.getElementById('loading');
+  const $status = document.getElementById('loading-status');
+  const $elapsed = document.getElementById('elapsed');
+  const $error = document.getElementById('error');
+  const $empty = document.getElementById('empty');
+  const $results = document.getElementById('results');
+  const $answerHeader = document.getElementById('answer-header');
+  const $answerQ = document.getElementById('answer-question');
+  const $copyBtn = document.getElementById('copy-btn');
+  const $downloadBtn = document.getElementById('download-btn');
+  const $consensus = document.getElementById('consensus-content');
+  const $dissentLabel = document.getElementById('dissent-label');
+  const $dissentCard = document.getElementById('dissent-card');
+  const $dissent = document.getElementById('dissent-content');
+  const $claude = document.getElementById('claude-content');
+  const $gpt = document.getElementById('gpt-content');
+  const $gemini = document.getElementById('gemini-content');
+  const $grok = document.getElementById('grok-content');
+  const $sidebar = document.getElementById('sidebar');
+  const $sidebarOverlay = document.getElementById('sidebar-overlay');
+  const $sidebarToggle = document.getElementById('sidebar-toggle');
+  const $toast = document.getElementById('toast');
+
+  marked.setOptions({ breaks: true, gfm: true });
+
+  // Helpers
+  function formatRelative(ts) {
+    const diff = Date.now() - ts;
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return s + 's ago';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24);
+    return d + 'd ago';
+  }
+  function showToast(msg, kind) {
+    $toast.textContent = msg;
+    $toast.className = 'toast ' + (kind || '') + ' show';
+    setTimeout(() => $toast.classList.remove('show'), 2200);
+  }
+  function uid() { return 't-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4); }
+
+  // Parse the structured markdown response
+  function parseResponse(text) {
+    const result = { consensus: '', dissent: '', raw: {} };
+    const parts = text.split(/^## /m).filter(p => p.trim());
+    for (const part of parts) {
+      const lines = part.split('\n');
+      const headerLine = lines[0].toLowerCase().trim();
+      const body = lines.slice(1).join('\n').trim();
+      if (headerLine.startsWith('consensus')) result.consensus = body;
+      else if (headerLine.startsWith('dissent')) result.dissent = body;
+      else if (headerLine.startsWith('raw')) {
+        const modelParts = body.split(/^### /m).filter(p => p.trim());
+        for (const mp of modelParts) {
+          const mlines = mp.split('\n');
+          const modelName = mlines[0].toLowerCase().trim();
+          const modelBody = mlines.slice(1).join('\n').trim();
+          if (modelName.includes('claude')) result.raw.claude = modelBody;
+          else if (modelName.includes('gpt')) result.raw.gpt = modelBody;
+          else if (modelName.includes('gemini')) result.raw.gemini = modelBody;
+          else if (modelName.includes('grok')) result.raw.grok = modelBody;
+        }
+      }
+    }
+    return result;
+  }
+
+  function renderAnswer(text) {
+    const parsed = parseResponse(text);
+    $consensus.innerHTML = parsed.consensus ? marked.parse(parsed.consensus) : '<em style="color:#475569">no consensus produced</em>';
+    if (parsed.dissent && parsed.dissent.trim()) {
+      $dissentLabel.style.display = 'block';
+      $dissentCard.style.display = 'block';
+      $dissent.innerHTML = marked.parse(parsed.dissent);
+    } else {
+      $dissentLabel.style.display = 'none';
+      $dissentCard.style.display = 'none';
+    }
+    $claude.innerHTML = parsed.raw.claude ? marked.parse(parsed.raw.claude) : '<em style="color:#475569">no response</em>';
+    $gpt.innerHTML = parsed.raw.gpt ? marked.parse(parsed.raw.gpt) : '<em style="color:#475569">no response</em>';
+    $gemini.innerHTML = parsed.raw.gemini ? marked.parse(parsed.raw.gemini) : '<em style="color:#475569">no response</em>';
+    $grok.innerHTML = parsed.raw.grok ? marked.parse(parsed.raw.grok) : '<em style="color:#475569">no response</em>';
+  }
+
+  function renderThreadList() {
+    if (threads.length === 0) {
+      $threadList.innerHTML = '<div class="empty-list">No threads yet. Ask a question.</div>';
+      return;
+    }
+    const sorted = [...threads].sort((a, b) => b.timestamp - a.timestamp);
+    $threadList.innerHTML = sorted.map(t => `
+      <div class="thread-item ${t.id === activeThreadId ? 'active' : ''} ${t.inProgress ? 'in-progress' : ''}" data-id="${t.id}">
+        <div class="question-preview">${escapeHtml(t.question)}</div>
+        <div class="meta">
+          <span>${formatRelative(t.timestamp)}</span>
+          <span class="actions">
+            <button class="action-btn copy" data-action="copy" data-id="${t.id}" title="Copy markdown">⧉</button>
+            <button class="action-btn download" data-action="download" data-id="${t.id}" title="Download .md">↓</button>
+            <button class="action-btn delete" data-action="delete" data-id="${t.id}" title="Delete">×</button>
+          </span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  }
+
+  function selectThread(id) {
+    const t = threads.find(x => x.id === id);
+    if (!t) return;
+    activeThreadId = id;
+    location.hash = id;
+    $answerHeader.classList.add('active');
+    $answerQ.textContent = t.question;
+    $empty.classList.add('hidden');
+    $error.classList.remove('active');
+    if (t.inProgress) {
+      $loading.classList.add('active');
+      $status.textContent = 'In progress...';
+    } else {
+      $loading.classList.remove('active');
+    }
+    if (t.answer) {
+      $results.classList.add('active');
+      renderAnswer(t.answer);
+    } else {
+      $results.classList.remove('active');
+    }
+    renderThreadList();
+    // close mobile sidebar
+    $sidebar.classList.remove('open');
+    $sidebarOverlay.classList.remove('open');
+  }
+
+  function newThread() {
+    activeThreadId = null;
+    location.hash = '';
+    $answerHeader.classList.remove('active');
+    $results.classList.remove('active');
+    $empty.classList.remove('hidden');
+    $error.classList.remove('active');
+    $loading.classList.remove('active');
+    $question.value = '';
+    $question.focus();
+    renderThreadList();
+    $sidebar.classList.remove('open');
+    $sidebarOverlay.classList.remove('open');
+  }
+
+  function buildMarkdown(thread) {
+    const date = new Date(thread.timestamp).toLocaleString();
+    let md = `# Council answer — ${date}\n\n`;
+    md += `## Question\n\n${thread.question}\n\n---\n\n`;
+    md += thread.answer || '_(no answer)_';
+    md += `\n\n---\n\n_Session: ${sessionId}_\n_InstaBid AI Council_`;
+    return md;
+  }
+
+  function copyThread(id) {
+    const t = threads.find(x => x.id === id);
+    if (!t) return;
+    navigator.clipboard.writeText(buildMarkdown(t))
+      .then(() => showToast('Copied to clipboard ✓', 'success'))
+      .catch(() => showToast('Copy failed — your browser blocked clipboard access'));
+  }
+
+  function downloadThread(id) {
+    const t = threads.find(x => x.id === id);
+    if (!t) return;
+    const md = buildMarkdown(t);
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const slug = t.question.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40).replace(/^-|-$/g, '');
+    const dateStr = new Date(t.timestamp).toISOString().slice(0, 10);
+    a.download = `council-${dateStr}-${slug}.md`;
+    a.href = url;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Downloaded ✓', 'success');
+  }
+
+  function deleteThread(id) {
+    if (!confirm('Delete this thread?')) return;
+    threads = threads.filter(t => t.id !== id);
+    saveThreads(threads);
+    if (activeThreadId === id) newThread();
+    else renderThreadList();
+    showToast('Thread deleted');
+  }
+
+  // Elapsed timer
+  let elapsedInterval = null;
+  function startTimer() {
+    const start = Date.now();
+    $elapsed.textContent = '0.0s';
+    elapsedInterval = setInterval(() => {
+      $elapsed.textContent = ((Date.now() - start) / 1000).toFixed(1) + 's';
+    }, 100);
+  }
+  function stopTimer() { if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; } }
+
+  async function askCouncil(question) {
+    // Create thread entry
+    const threadId = uid();
+    const newT = { id: threadId, question, answer: '', timestamp: Date.now(), inProgress: true };
+    threads.unshift(newT);
+    saveThreads(threads);
+    activeThreadId = threadId;
+    location.hash = threadId;
+
+    // Update UI
+    $error.classList.remove('active');
+    $empty.classList.add('hidden');
+    $loading.classList.add('active');
+    $status.textContent = 'Routing to four models...';
+    $send.disabled = true;
+    $answerHeader.classList.add('active');
+    $answerQ.textContent = question;
+    $results.classList.add('active');
+    $claude.innerHTML = '<em style="color:#475569">streaming...</em>';
+    $gpt.innerHTML = '<em style="color:#475569">streaming...</em>';
+    $gemini.innerHTML = '<em style="color:#475569">streaming...</em>';
+    $grok.innerHTML = '<em style="color:#475569">streaming...</em>';
+    $consensus.innerHTML = '<em style="color:#94a3b8">synthesizing...</em>';
+    $dissentLabel.style.display = 'none';
+    $dissentCard.style.display = 'none';
+    renderThreadList();
+    startTimer();
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatInput: question, sessionId })
+      });
+
+      if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + await res.text());
+      if (!res.body) throw new Error('No response body');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+      let chunkCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const obj = JSON.parse(trimmed);
+            if (obj.type === 'item' && obj.content) {
+              accumulated += obj.content;
+              chunkCount++;
+              $status.textContent = 'Streaming · ' + chunkCount + ' chunks · ' + accumulated.length + ' chars';
+              renderAnswer(accumulated);
+            } else if (obj.type === 'begin') {
+              $status.textContent = 'Models started · synthesizing...';
+            } else if (obj.type === 'end') {
+              $status.textContent = 'Complete';
+            }
+          } catch (e) {}
+        }
+      }
+      if (buffer.trim()) {
+        try {
+          const obj = JSON.parse(buffer.trim());
+          if (obj.type === 'item' && obj.content) accumulated += obj.content;
+        } catch (e) {}
+      }
+
+      renderAnswer(accumulated);
+
+      // Save final answer
+      const idx = threads.findIndex(t => t.id === threadId);
+      if (idx !== -1) {
+        threads[idx].answer = accumulated;
+        threads[idx].inProgress = false;
+        threads[idx].timestamp = Date.now();
+        saveThreads(threads);
+      }
+
+      $status.textContent = '✓ Complete';
+      renderThreadList();
+      setTimeout(() => $loading.classList.remove('active'), 800);
+
+    } catch (err) {
+      console.error(err);
+      $error.textContent = 'Error: ' + (err.message || 'Unknown error');
+      $error.classList.add('active');
+      $loading.classList.remove('active');
+      const idx = threads.findIndex(t => t.id === threadId);
+      if (idx !== -1) {
+        threads[idx].inProgress = false;
+        threads[idx].answer = '_(error: ' + (err.message || 'unknown') + ')_';
+        saveThreads(threads);
+        renderThreadList();
+      }
+    } finally {
+      stopTimer();
+      $send.disabled = false;
+    }
+  }
+
+  // Events
+  $send.addEventListener('click', () => {
+    const q = $question.value.trim();
+    if (!q) { $question.focus(); return; }
+    askCouncil(q);
+    $question.value = '';
+  });
+
+  $question.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      $send.click();
+    }
+  });
+
+  $newBtn.addEventListener('click', newThread);
+
+  // Sidebar event delegation
+  $threadList.addEventListener('click', (e) => {
+    const actionBtn = e.target.closest('[data-action]');
+    if (actionBtn) {
+      e.stopPropagation();
+      const action = actionBtn.dataset.action;
+      const id = actionBtn.dataset.id;
+      if (action === 'copy') copyThread(id);
+      else if (action === 'download') downloadThread(id);
+      else if (action === 'delete') deleteThread(id);
+      return;
+    }
+    const item = e.target.closest('.thread-item');
+    if (item) selectThread(item.dataset.id);
+  });
+
+  // Answer header actions
+  $copyBtn.addEventListener('click', () => { if (activeThreadId) copyThread(activeThreadId); });
+  $downloadBtn.addEventListener('click', () => { if (activeThreadId) downloadThread(activeThreadId); });
+
+  // Mobile sidebar toggle
+  $sidebarToggle.addEventListener('click', () => {
+    $sidebar.classList.toggle('open');
+    $sidebarOverlay.classList.toggle('open');
+  });
+  $sidebarOverlay.addEventListener('click', () => {
+    $sidebar.classList.remove('open');
+    $sidebarOverlay.classList.remove('open');
+  });
+
+  // Hash routing — open thread by URL hash
+  function handleHash() {
+    const id = location.hash.replace(/^#/, '');
+    if (id && threads.find(t => t.id === id)) selectThread(id);
+  }
+  window.addEventListener('hashchange', handleHash);
+
+  // Init
+  renderThreadList();
+  handleHash();
+  $question.focus();
+</script>
+</body>
+</html>
