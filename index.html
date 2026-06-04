@@ -557,6 +557,11 @@
   .model-card.grok .swatch { background: #a78bfa; }
   .model-card.grok .vendor { color: #a78bfa; }
 
+  .model-card.qwen { border-color: #1e3a8a; }
+  .model-card.qwen:hover { border-color: #6366f1; }
+  .model-card.qwen .swatch { background: #6366f1; }
+  .model-card.qwen .vendor { color: #6366f1; }
+
   /* Markdown overrides */
   .content h3 { font-size: 0.98rem; margin: 0.9rem 0 0.35rem; color: #f1f5f9; }
   .content h4 { font-size: 0.92rem; margin: 0.7rem 0 0.3rem; color: #e2e8f0; }
@@ -675,6 +680,10 @@
           <div class="header"><div class="swatch"></div><div class="name">Grok 4.3</div><div class="vendor">xAI</div></div>
           <div class="content" id="grok-content"><em style="color:#475569">waiting...</em></div>
         </div>
+        <div class="model-card qwen">
+          <div class="header"><div class="swatch"></div><div class="name">Qwen 3.7 Max</div><div class="vendor">Alibaba</div></div>
+          <div class="content" id="qwen-content"><em style="color:#475569">waiting...</em></div>
+        </div>
       </div>
 
     </div>
@@ -728,6 +737,7 @@
   const $gpt = document.getElementById('gpt-content');
   const $gemini = document.getElementById('gemini-content');
   const $grok = document.getElementById('grok-content');
+  const $qwen = document.getElementById('qwen-content');
   const $sidebar = document.getElementById('sidebar');
   const $sidebarOverlay = document.getElementById('sidebar-overlay');
   const $sidebarToggle = document.getElementById('sidebar-toggle');
@@ -774,6 +784,7 @@
           else if (modelName.includes('gpt')) result.raw.gpt = modelBody;
           else if (modelName.includes('gemini')) result.raw.gemini = modelBody;
           else if (modelName.includes('grok')) result.raw.grok = modelBody;
+          else if (modelName.includes('qwen')) result.raw.qwen = modelBody;
         }
       }
     }
@@ -795,6 +806,7 @@
     $gpt.innerHTML = parsed.raw.gpt ? marked.parse(parsed.raw.gpt) : '<em style="color:#475569">no response</em>';
     $gemini.innerHTML = parsed.raw.gemini ? marked.parse(parsed.raw.gemini) : '<em style="color:#475569">no response</em>';
     $grok.innerHTML = parsed.raw.grok ? marked.parse(parsed.raw.grok) : '<em style="color:#475569">no response</em>';
+    $qwen.innerHTML = parsed.raw.qwen ? marked.parse(parsed.raw.qwen) : '<em style="color:#475569">no response</em>';
   }
 
   function renderThreadList() {
@@ -939,6 +951,7 @@
     $gpt.innerHTML = '<em style="color:#475569">streaming...</em>';
     $gemini.innerHTML = '<em style="color:#475569">streaming...</em>';
     $grok.innerHTML = '<em style="color:#475569">streaming...</em>';
+    $qwen.innerHTML = '<em style="color:#475569">streaming...</em>';
     $consensus.innerHTML = '<em style="color:#94a3b8">synthesizing...</em>';
     $dissentLabel.style.display = 'none';
     $dissentCard.style.display = 'none';
@@ -1064,7 +1077,7 @@
       $loading.classList.remove('active');
       $status.textContent = 'Failed';
       const placeholder = '<em style="color:#7f1d1d">— no response —</em>';
-      [$claude, $gpt, $gemini, $grok, $consensus].forEach(el => {
+      [$claude, $gpt, $gemini, $grok, $qwen, $consensus].forEach(el => {
         if (el && /streaming|synthesizing|waiting/i.test(el.textContent || '')) {
           el.innerHTML = placeholder;
         }
