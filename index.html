@@ -766,29 +766,49 @@
   }
   function uid() { return 't-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4); }
 
-  // Parse the structured markdown response
+  // Parse the structured markdown response.
+  // Walks line-by-line so nested ## / ### headings inside model answers
+  // don't break the outer section boundaries.
   function parseResponse(text) {
     const result = { consensus: '', dissent: '', raw: {} };
-    const parts = text.split(/^## /m).filter(p => p.trim());
-    for (const part of parts) {
-      const lines = part.split('\n');
-      const headerLine = lines[0].toLowerCase().trim();
-      const body = lines.slice(1).join('\n').trim();
-      if (headerLine.startsWith('consensus')) result.consensus = body;
-      else if (headerLine.startsWith('dissent')) result.dissent = body;
-      else if (headerLine.startsWith('raw')) {
-        const modelParts = body.split(/^### /m).filter(p => p.trim());
-        for (const mp of modelParts) {
-          const mlines = mp.split('\n');
-          const modelName = mlines[0].toLowerCase().trim();
-          const modelBody = mlines.slice(1).join('\n').trim();
-          if (modelName.includes('claude')) result.raw.claude = modelBody;
-          else if (modelName.includes('gpt')) result.raw.gpt = modelBody;
-          else if (modelName.includes('gemini')) result.raw.gemini = modelBody;
-          else if (modelName.includes('grok')) result.raw.grok = modelBody;
-          else if (modelName.includes('deepseek')) result.raw.deepseek = modelBody;
-        }
+    const buckets = { consensus: [], dissent: [] };
+    const rawBuckets = {};
+    let section = null;    // 'consensus' | 'dissent' | 'raw'
+    let modelKey = null;
+    const MODELS = ['claude', 'gpt', 'gemini', 'grok', 'deepseek'];
+
+    for (const line of text.split('\n')) {
+      // Only ## with one of the three known top-level headers starts a new section.
+      // Nested h2 like "## TIER 1: ..." inside an answer is treated as content.
+      if (line.startsWith('## ')) {
+        const lower = line.slice(3).toLowerCase().trim();
+        if (lower.startsWith('consensus')) { section = 'consensus'; modelKey = null; continue; }
+        if (lower.startsWith('dissent'))   { section = 'dissent';   modelKey = null; continue; }
+        if (lower.startsWith('raw'))       { section = 'raw';       modelKey = null; continue; }
+        // fall through — nested h2 inside a model answer
       }
+
+      // Inside raw answers, only ### lines that name a known model start a new model block.
+      if (section === 'raw' && line.startsWith('### ')) {
+        const lower = line.slice(4).toLowerCase().trim();
+        const matched = MODELS.find(m => lower.includes(m));
+        if (matched) {
+          modelKey = matched;
+          if (!rawBuckets[modelKey]) rawBuckets[modelKey] = [];
+          continue;
+        }
+        // fall through — nested h3 like "### 1. Marcus Aurelius" inside a model answer
+      }
+
+      if (section === 'consensus') buckets.consensus.push(line);
+      else if (section === 'dissent') buckets.dissent.push(line);
+      else if (section === 'raw' && modelKey) rawBuckets[modelKey].push(line);
+    }
+
+    result.consensus = buckets.consensus.join('\n').trim();
+    result.dissent = buckets.dissent.join('\n').trim();
+    for (const k of Object.keys(rawBuckets)) {
+      result.raw[k] = rawBuckets[k].join('\n').trim();
     }
     return result;
   }
